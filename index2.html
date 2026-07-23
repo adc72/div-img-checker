@@ -1,0 +1,917 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Batch Image Dimension Divisibility & Power of 2 Checker</title>
+  <style>
+    :root {
+      --bg: #f8fafc;
+      --card-bg: #ffffff;
+      --border: #e2e8f0;
+      --primary: #2563eb;
+      --text: #0f172a;
+      --text-muted: #475569; /* Made slightly darker (was #64748b) */
+      --success-bg: #dcfce7;
+      --success-border: #86efac;
+      --success-text: #14532d;
+      --error-bg: #fee2e2;
+      --error-border: #fca5a5;
+      --error-text: #7f1d1d;
+      --bright-red: #ef4444;
+      --bright-green: #16a34a;
+    }
+
+    body {
+      font-family: system-ui, -apple-system, sans-serif;
+      background-color: var(--bg);
+      color: var(--text);
+      display: flex;
+      justify-content: center;
+      align-items: flex-start;
+      min-height: 100vh;
+      margin: 0;
+      padding: 0 20px 40px 20px;
+    }
+
+    .container {
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 0 2.25rem 2.25rem 2.25rem;
+      max-width: 950px;
+      width: 100%;
+      box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
+      margin-top: 20px;
+    }
+
+    /* Combined Sticky Top Section */
+    .sticky-top-section {
+      position: sticky;
+      top: 0;
+      background-color: var(--card-bg);
+      z-index: 100;
+      padding-top: 1.75rem;
+      padding-bottom: 1.25rem;
+      border-bottom: 1px solid var(--border);
+    }
+
+    /* Header Layout */
+    .header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 1.5rem;
+    }
+
+    .title-group {
+      display: flex;
+      flex-direction: column;
+      gap: 0.5rem;
+    }
+
+    h1 {
+      font-size: 1.6rem;
+      margin: 0;
+    }
+
+    /* Total Status Summary Badge */
+    .summary-badge {
+      display: none;
+      font-size: 1.15rem;
+      font-weight: 700;
+      padding: 0.45rem 0.9rem;
+      border-radius: 8px;
+      background-color: #f1f5f9;
+      border: 1px solid var(--border);
+      color: var(--text);
+      width: fit-content;
+      margin-top: 0.25rem;
+    }
+
+    .summary-badge span.valid-count {
+      color: var(--bright-green);
+      font-weight: 800;
+    }
+
+    .summary-badge span.invalid-count {
+      color: var(--bright-red);
+      font-weight: 800;
+    }
+
+    .subtitle {
+      color: var(--text-muted);
+      font-size: 1.05rem;
+      margin: 0.35rem 0 0 0;
+      line-height: 1.4;
+    }
+
+    .action-buttons {
+      display: flex;
+      gap: 0.75rem;
+      flex-shrink: 0;
+    }
+
+    .dropzone {
+      border: 2px dashed var(--border);
+      border-radius: 8px;
+      padding: 2rem 1.25rem;
+      text-align: center;
+      cursor: pointer;
+      background-color: #f8fafc;
+      transition: border-color 0.2s, background-color 0.2s;
+    }
+
+    .dropzone span {
+      font-size: 1.15rem;
+    }
+
+    .dropzone:hover, .dropzone.dragover {
+      border-color: var(--primary);
+      background-color: #eff6ff;
+    }
+
+    .dropzone input {
+      display: none;
+    }
+
+    /* CSS Grid Container */
+    .results-grid {
+      margin-top: 1.75rem;
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+      gap: 1.5rem;
+    }
+
+    /* Grid Item Card */
+    .image-card {
+      position: relative;
+      z-index: 1; /* Base stacking level */
+      display: flex;
+      flex-direction: column;
+      border-radius: 8px;
+      border: 1px solid var(--border);
+      background-color: #fff;
+      overflow: visible; /* Prevents overlay dropdowns from being clipped */
+      transition: transform 0.15s ease, box-shadow 0.15s ease;
+      cursor: grab;
+    }
+
+    .image-card:active {
+      cursor: grabbing;
+    }
+
+    .image-card.dragging {
+      opacity: 0.4;
+      transform: scale(0.98);
+    }
+
+    /* Elevate active card above subsequent grid cards when dropdown is open */
+    .image-card:has(.rec-box.is-open),
+    .image-card.has-open-rec {
+      z-index: 90;
+    }
+
+    .image-card:hover {
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+    }
+
+    .image-card.valid {
+      background-color: var(--success-bg);
+      border-color: var(--success-border);
+    }
+
+    .image-card.invalid {
+      background-color: var(--error-bg);
+      border-color: var(--error-border);
+    }
+
+    .image-card.valid.is-hidden {
+      display: none !important;
+    }
+
+    .preview-wrapper {
+      position: relative;
+      height: 160px;
+      width: 100%;
+      background-color: #f1f5f9;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border-bottom: 1px solid var(--border);
+      border-top-left-radius: 7px;
+      border-top-right-radius: 7px;
+      overflow: hidden;
+      /* Checkerboard pattern so transparency shows visually */
+      background-image: 
+        linear-gradient(45deg, #cbd5e1 25%, transparent 25%), 
+        linear-gradient(-45deg, #cbd5e1 25%, transparent 25%), 
+        linear-gradient(45deg, transparent 75%, #cbd5e1 75%), 
+        linear-gradient(-45deg, transparent 75%, #cbd5e1 75%);
+      background-size: 16px 16px;
+      background-position: 0 0, 0 8px, 8px -8px, -8px 0px;
+    }
+
+    /* Top-Left Corner Indicators */
+    .corner-badge {
+      position: absolute;
+      top: 10px;
+      left: 10px;
+      width: 32px;
+      height: 32px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 900;
+      font-size: 1.25rem;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.15);
+      z-index: 10;
+    }
+
+    .corner-badge.check {
+      background-color: var(--bright-green);
+      color: #ffffff;
+    }
+
+    .corner-badge.exclamation {
+      background-color: var(--bright-red);
+      color: #ffffff;
+    }
+
+    /* Top-Right Delete/Clear Button */
+    .card-delete-btn {
+      position: absolute;
+      top: 10px;
+      right: 10px;
+      width: 28px;
+      height: 28px;
+      border-radius: 50%;
+      background-color: rgba(15, 23, 42, 0.65);
+      color: #ffffff;
+      border: none;
+      font-size: 0.9rem;
+      font-weight: 700;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      z-index: 10;
+      transition: background-color 0.2s ease, transform 0.15s ease;
+      line-height: 1;
+      padding: 0;
+    }
+
+    .card-delete-btn:hover {
+      background-color: var(--bright-red);
+      transform: scale(1.1);
+    }
+
+    .card-delete-btn:active {
+      transform: scale(0.95);
+    }
+
+    .image-card img {
+      max-width: 100%;
+      max-height: 100%;
+      object-fit: contain;
+    }
+
+    .card-info {
+      padding: 1.25rem;
+      display: flex;
+      flex-direction: column;
+      flex-grow: 1;
+      font-size: 1rem;
+    }
+
+    .file-header {
+      margin-bottom: 0.75rem;
+    }
+
+    .file-name {
+      font-weight: 800;
+      font-size: 1.2rem;
+      margin-bottom: 0.15rem;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      color: var(--text);
+    }
+
+    .file-meta-sub {
+      font-size: 0.85rem;
+      color: var(--text-muted);
+      margin: 0;
+      display: flex;
+      flex-direction: column;
+      gap: 0.1rem;
+    }
+
+    .status-badge {
+      display: inline-block;
+      font-weight: 700;
+      font-size: 0.95rem;
+      margin-bottom: 0.85rem;
+      padding: 0.35rem 0.75rem;
+      border-radius: 6px;
+      width: fit-content;
+    }
+
+    .status-badge.valid {
+      background-color: #bbf7d0;
+      color: var(--success-text);
+    }
+
+    .status-badge.invalid {
+      background-color: #fecaca;
+      color: var(--error-text);
+    }
+
+    .details-list {
+      margin: 0;
+      padding-left: 0;
+      list-style: none;
+      color: var(--text);
+      line-height: 1.6;
+      font-size: 1.05rem;
+    }
+
+    .details-list li {
+      position: relative; /* Anchor point for absolute dropdown overlay */
+      margin-bottom: 0.6rem;
+    }
+
+    .details-list li:last-child {
+      margin-bottom: 0;
+    }
+
+    .details-list strong {
+      font-weight: 700;
+    }
+
+    .details-list li.invalid-line {
+      color: var(--bright-red);
+      font-weight: 700;
+    }
+
+    /* Extra Large Bold Green Checkmark */
+    .check-mark {
+      color: var(--bright-green);
+      font-weight: 900;
+      font-size: 1.45rem;
+      margin-left: 0.3rem;
+      margin-right: 0.15rem;
+      vertical-align: -2px;
+      display: inline-block;
+      line-height: 1;
+    }
+
+    /* Inline Badges (White Theme) */
+    .tag-pow2, .tag-alpha {
+      display: inline-block;
+      font-size: 0.75rem;
+      font-weight: 700;
+      background-color: #ffffff;
+      color: #0f172a;
+      border: 1px solid var(--border);
+      box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+      padding: 0.15rem 0.4rem;
+      border-radius: 4px;
+      margin-left: 0.25rem;
+      vertical-align: middle;
+      line-height: 1;
+    }
+
+    .tag-alpha.has-alpha {
+      background-color: #dbeafe;
+      color: #1e40af;
+      border-color: #93c5fd;
+    }
+
+    .tag-alpha.no-alpha {
+      background-color: #f1f5f9;
+      color: var(--text-muted);
+    }
+
+    /* Compact Interactive Clickable Emoji Trigger Button */
+    .rec-trigger-btn {
+      background: #ffffff;
+      border: 1px solid var(--error-border);
+      border-radius: 5px;
+      cursor: pointer;
+      font-size: 0.75rem;
+      font-weight: 700;
+      padding: 0.15rem 0.35rem;
+      margin-left: 0.25rem;
+      display: inline-flex;
+      align-items: center;
+      gap: 0.15rem;
+      box-shadow: 0 1px 2px rgba(0,0,0,0.05);
+      transition: all 0.15s ease;
+      vertical-align: middle;
+      user-select: none;
+      color: var(--error-text);
+    }
+
+    .rec-trigger-btn:hover {
+      background-color: #fff1f2;
+      border-color: var(--bright-red);
+      transform: scale(1.05);
+    }
+
+    .rec-trigger-btn:active {
+      transform: scale(0.95);
+    }
+
+    /* Absolute Floating Overlay Dropdown */
+    .rec-box {
+      display: none;
+      position: absolute;
+      top: 100%;
+      left: 0;
+      right: 0;
+      z-index: 100;
+      margin-top: 0.35rem;
+      background-color: #ffffff;
+      border: 1px solid var(--error-border);
+      border-radius: 6px;
+      padding: 0.5rem 0.75rem;
+      font-size: 0.85rem;
+      font-weight: normal;
+      color: var(--text);
+      box-shadow: 0 8px 16px rgba(0, 0, 0, 0.12);
+    }
+
+    .rec-box.is-open {
+      display: block;
+      animation: fadeIn 0.15s ease-in;
+    }
+
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(-3px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    .rec-box-title {
+      font-weight: 700;
+      color: var(--error-text);
+      margin-bottom: 0.3rem;
+      display: block;
+      font-size: 0.8rem;
+      text-transform: uppercase;
+      letter-spacing: 0.03em;
+    }
+
+    .rec-option-list {
+      display: flex;
+      flex-direction: column;
+      gap: 0.25rem;
+    }
+
+    .rec-option-item {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 0.2rem 0.35rem;
+      border-radius: 4px;
+      background-color: #fef2f2;
+    }
+
+    .rec-option-item.best-match {
+      background-color: #fef08a;
+      border: 1px solid #fde047;
+      font-weight: 700;
+    }
+
+    .rec-option-val {
+      color: #0f172a;
+    }
+
+    .rec-option-diff {
+      font-weight: 700;
+      color: #991b1b;
+      font-size: 0.8rem;
+    }
+
+    /* Button Styles */
+    .btn {
+      display: none;
+      padding: 0.85rem 1.4rem;
+      background-color: #ffffff;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      color: var(--text);
+      font-size: 1.05rem;
+      font-weight: 600;
+      cursor: pointer;
+      box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+      transition: all 0.2s ease;
+    }
+
+    .btn:hover {
+      background-color: #f1f5f9;
+      color: var(--text);
+      border-color: #cbd5e1;
+      transform: translateY(-1px);
+    }
+
+    .btn:active {
+      transform: translateY(0);
+    }
+
+    .btn-toggle-valid {
+      background-color: #f0fdf4;
+      border-color: var(--success-border);
+      color: var(--success-text);
+    }
+
+    .btn-toggle-valid:hover {
+      background-color: #dcfce7;
+      color: var(--success-text);
+      border-color: #4ade80;
+    }
+  </style>
+</head>
+<body>
+
+  <div class="container">
+    <div class="sticky-top-section">
+      <div class="header">
+        <div>
+          <div class="title-group">
+            <h1>Divisibility & Power of 2 Checker</h1>
+            <div class="summary-badge" id="summary-badge"></div>
+          </div>
+          <p class="subtitle">Upload single or multiple images to check if their dimensions are divisible by 4, powers of 2, and detect transparency (alpha channel).</p>
+        </div>
+        <div class="action-buttons">
+          <button type="button" class="btn btn-toggle-valid" id="toggle-valid-btn">Hide Divisible</button>
+          <button type="button" class="btn" id="clear-btn">Clear All</button>
+        </div>
+      </div>
+
+      <div class="dropzone" id="dropzone">
+        <span>Click or drag & drop <strong>one or more images</strong> here</span>
+        <input type="file" id="file-input" accept="image/*" multiple>
+      </div>
+    </div>
+
+    <div class="results-grid" id="results-grid"></div>
+  </div>
+
+  <script>
+    const dropzone = document.getElementById('dropzone');
+    const fileInput = document.getElementById('file-input');
+    const resultsGrid = document.getElementById('results-grid');
+    const clearBtn = document.getElementById('clear-btn');
+    const toggleValidBtn = document.getElementById('toggle-valid-btn');
+    const summaryBadge = document.getElementById('summary-badge');
+
+    let isHidingValid = false;
+    let draggedCard = null;
+
+    dropzone.addEventListener('click', () => fileInput.click());
+
+    ['dragenter', 'dragover'].forEach(eventName => {
+      dropzone.addEventListener(eventName, (e) => {
+        e.preventDefault();
+        dropzone.classList.add('dragover');
+      });
+    });
+
+    ['dragleave', 'drop'].forEach(eventName => {
+      dropzone.addEventListener(eventName, (e) => {
+        e.preventDefault();
+        dropzone.classList.remove('dragover');
+      });
+    });
+
+    dropzone.addEventListener('drop', (e) => {
+      const files = Array.from(e.dataTransfer.files).filter(f => f.type.startsWith('image/'));
+      if (files.length > 0) processFiles(files);
+    });
+
+    fileInput.addEventListener('change', (e) => {
+      const files = Array.from(e.target.files);
+      if (files.length > 0) processFiles(files);
+    });
+
+    clearBtn.addEventListener('click', resetPage);
+    toggleValidBtn.addEventListener('click', toggleValidImages);
+
+    function closeAllRecBoxes() {
+      document.querySelectorAll('.rec-box.is-open').forEach(box => box.classList.remove('is-open'));
+      document.querySelectorAll('.image-card.has-open-rec').forEach(card => card.classList.remove('has-open-rec'));
+    }
+
+    document.addEventListener('click', (e) => {
+      if (!e.target.closest('.rec-trigger-btn') && !e.target.closest('.rec-box')) {
+        closeAllRecBoxes();
+      }
+    });
+
+    function resetPage() {
+      fileInput.value = '';
+      resultsGrid.innerHTML = '';
+      isHidingValid = false;
+      toggleValidBtn.textContent = 'Hide Divisible';
+      updateButtonVisibility();
+    }
+
+    function toggleValidImages() {
+      isHidingValid = !isHidingValid;
+      const validCards = resultsGrid.querySelectorAll('.image-card.valid');
+      
+      validCards.forEach(card => {
+        card.classList.toggle('is-hidden', isHidingValid);
+      });
+
+      toggleValidBtn.textContent = isHidingValid ? 'Show Divisible' : 'Hide Divisible';
+    }
+
+    function updateButtonVisibility() {
+      const allCards = resultsGrid.querySelectorAll('.image-card');
+      const validCards = resultsGrid.querySelectorAll('.image-card.valid');
+      const invalidCards = resultsGrid.querySelectorAll('.image-card.invalid');
+
+      const total = allCards.length;
+      const validCount = validCards.length;
+      const invalidCount = invalidCards.length;
+
+      clearBtn.style.display = total > 0 ? 'block' : 'none';
+      toggleValidBtn.style.display = validCount > 0 ? 'block' : 'none';
+
+      if (total > 0) {
+        summaryBadge.innerHTML = `Total: <strong>${total}</strong> • <span class="valid-count">${validCount} Divisible</span> • <span class="invalid-count">${invalidCount} Not Divisible</span>`;
+        summaryBadge.style.display = 'inline-block';
+      } else {
+        summaryBadge.style.display = 'none';
+      }
+    }
+
+    function isPowerOfTwo(n) {
+      return n > 0 && (n & (n - 1)) === 0;
+    }
+
+    function formatFileSize(bytes) {
+      if (bytes === 0 || isNaN(bytes)) return '0 Bytes';
+      const k = 1024;
+      const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+      const i = Math.floor(Math.log(bytes) / Math.log(k));
+      return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+    }
+
+    function formatDate(date) {
+      if (!date || isNaN(date.getTime())) return 'Unknown';
+      return date.toLocaleString(undefined, {
+        year: 'numeric',
+        month: 'short',
+        day: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit'
+      });
+    }
+
+    // Canvas pixel inspection for transparent pixels (Alpha < 255)
+    function checkHasAlpha(img) {
+      try {
+        const canvas = document.createElement('canvas');
+        canvas.width = img.naturalWidth;
+        canvas.height = img.naturalHeight;
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(img, 0, 0);
+        
+        const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+        const data = imageData.data;
+        
+        // Loop through alpha channels (every 4th byte starting at index 3)
+        for (let i = 3; i < data.length; i += 4) {
+          if (data[i] < 255) {
+            return true; // Transparent pixel found
+          }
+        }
+      } catch (err) {
+        console.warn('Could not analyze alpha channel:', err);
+      }
+      return false;
+    }
+
+    function getRecommendationWidget(val) {
+      if (val % 4 === 0) return '';
+
+      const remainder = val % 4;
+      const closestLower = val - remainder;
+      const closestUpper = val + (4 - remainder);
+      const nextLower = closestLower - 4;
+      const nextUpper = closestUpper + 4;
+
+      let candidates = [];
+      if (remainder === 1) {
+        candidates = [
+          { val: closestLower, diff: -remainder, isClosest: true },
+          { val: closestUpper, diff: 4 - remainder, isClosest: false },
+          { val: nextLower, diff: -remainder - 4, isClosest: false }
+        ];
+      } else if (remainder === 3) {
+        candidates = [
+          { val: closestUpper, diff: 4 - remainder, isClosest: true },
+          { val: closestLower, diff: -remainder, isClosest: false },
+          { val: nextUpper, diff: (4 - remainder) + 4, isClosest: false }
+        ];
+      } else {
+        candidates = [
+          { val: closestLower, diff: -2, isClosest: true },
+          { val: closestUpper, diff: +2, isClosest: true },
+          { val: nextLower, diff: -6, isClosest: false }
+        ];
+      }
+
+      const optionsHtml = candidates.map(c => {
+        const diffStr = c.diff > 0 ? `+${c.diff}px` : `${c.diff}px`;
+        const bestClass = c.isClosest ? 'best-match' : '';
+        const star = c.isClosest ? ' ⭐' : '';
+        return `
+          <div class="rec-option-item ${bestClass}">
+            <span class="rec-option-val"><strong>${c.val}px</strong>${star}</span>
+            <span class="rec-option-diff">${diffStr}</span>
+          </div>
+        `;
+      }).join('');
+
+      return `
+        <button type="button" class="rec-trigger-btn" title="View 3 recommended divisible sizes">
+          💡 Recs
+        </button>
+        <div class="rec-box">
+          <span class="rec-box-title">Suggested ÷4 Sizes:</span>
+          <div class="rec-option-list">
+            ${optionsHtml}
+          </div>
+        </div>
+      `;
+    }
+
+    function processFiles(files) {
+      files.forEach(file => {
+        const reader = new FileReader();
+        reader.onload = function(e) {
+          const img = new Image();
+          img.onload = function() {
+            const width = img.naturalWidth;
+            const height = img.naturalHeight;
+
+            const widthDivisible = width % 4 === 0;
+            const heightDivisible = height % 4 === 0;
+            const isValid = widthDivisible && heightDivisible;
+
+            const widthPow2 = isPowerOfTwo(width);
+            const heightPow2 = isPowerOfTwo(height);
+            const hasAlpha = checkHasAlpha(img);
+
+            const fileSize = file.size;
+            const modifiedDate = file.lastModified 
+              ? new Date(file.lastModified) 
+              : (file.lastModifiedDate || null);
+
+            const existingCard = resultsGrid.querySelector(`.image-card[data-file-name="${CSS.escape(file.name)}"]`);
+            if (existingCard) {
+              existingCard.remove();
+            }
+
+            createImageCard(
+              file.name, 
+              e.target.result, 
+              width, 
+              height, 
+              widthDivisible, 
+              heightDivisible, 
+              isValid,
+              widthPow2,
+              heightPow2,
+              hasAlpha,
+              fileSize,
+              modifiedDate
+            );
+            updateButtonVisibility();
+          };
+          img.src = e.target.result;
+        };
+        reader.readAsDataURL(file);
+      });
+    }
+
+    function createImageCard(fileName, imgSrc, width, height, widthDivisible, heightDivisible, isValid, widthPow2, heightPow2, hasAlpha, fileSize, modifiedDate) {
+      const card = document.createElement('div');
+      card.className = `image-card ${isValid ? 'valid' : 'invalid'} ${isValid && isHidingValid ? 'is-hidden' : ''}`;
+      
+      card.setAttribute('data-file-name', fileName);
+      card.setAttribute('draggable', 'true');
+
+      const cornerBadge = isValid
+        ? '<div class="corner-badge check" title="Valid">✓</div>'
+        : '<div class="corner-badge exclamation" title="Not Divisible">!</div>';
+
+      const statusBadge = isValid 
+        ? '<span class="status-badge valid">✅ Divisible by 4</span>' 
+        : '<span class="status-badge invalid">❗ Not Divisible</span>';
+
+      const widthPow2Tag = widthPow2 ? '<span class="tag-pow2">⚡ Power of 2</span>' : '';
+      const heightPow2Tag = heightPow2 ? '<span class="tag-pow2">⚡ Power of 2</span>' : '';
+
+      const alphaValueStr = hasAlpha 
+        ? '<span class="tag-alpha has-alpha" title="Contains transparent pixels">✨ Present (Transparent)</span>' 
+        : '<span class="tag-alpha no-alpha">None (Opaque)</span>';
+
+      const checkMarkHtml = '<span class="check-mark">✓</span>';
+
+      const widthRecWidget = getRecommendationWidget(width);
+      const heightRecWidget = getRecommendationWidget(height);
+
+      const formattedFileSize = formatFileSize(fileSize);
+      const formattedDateStr = formatDate(modifiedDate);
+
+      card.innerHTML = `
+        <div class="preview-wrapper">
+          ${cornerBadge}
+          <button type="button" class="card-delete-btn" title="Remove image">✕</button>
+          <img src="${imgSrc}" alt="${fileName}">
+        </div>
+        <div class="card-info">
+          <div class="file-header">
+            <div class="file-name" title="${fileName}">${fileName}</div>
+            <div class="file-meta-sub">
+              <span>Size: ${formattedFileSize}</span>
+              <span>Modified: ${formattedDateStr}</span>
+            </div>
+          </div>
+          ${statusBadge}
+          <ul class="details-list">
+            <li class="${widthDivisible ? '' : 'invalid-line'}">
+              <strong>Width:</strong> ${width}px ${widthDivisible ? checkMarkHtml : ''} ${widthPow2Tag} ${widthRecWidget}
+            </li>
+            <li class="${heightDivisible ? '' : 'invalid-line'}">
+              <strong>Height:</strong> ${height}px ${heightDivisible ? checkMarkHtml : ''} ${heightPow2Tag} ${heightRecWidget}
+            </li>
+            <li>
+              <strong>Alpha Channel:</strong> ${alphaValueStr}
+            </li>
+          </ul>
+        </div>
+      `;
+
+      // Drag and drop event listeners for reordering
+      card.addEventListener('dragstart', (e) => {
+        draggedCard = card;
+        setTimeout(() => card.classList.add('dragging'), 0);
+      });
+
+      card.addEventListener('dragend', () => {
+        card.classList.remove('dragging');
+        draggedCard = null;
+      });
+
+      card.addEventListener('dragover', (e) => {
+        e.preventDefault();
+        const targetCard = e.target.closest('.image-card');
+        if (targetCard && targetCard !== draggedCard) {
+          const rect = targetCard.getBoundingClientRect();
+          const next = (e.clientX - rect.left) > (rect.width / 2) || (e.clientY - rect.top) > (rect.height / 2);
+          
+          if (next) {
+            resultsGrid.insertBefore(draggedCard, targetCard.nextSibling);
+          } else {
+            resultsGrid.insertBefore(draggedCard, targetCard);
+          }
+        }
+      });
+
+      const deleteBtn = card.querySelector('.card-delete-btn');
+      deleteBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        card.remove();
+        updateButtonVisibility();
+      });
+
+      const triggerBtns = card.querySelectorAll('.rec-trigger-btn');
+      triggerBtns.forEach(btn => {
+        btn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          const box = btn.nextElementSibling;
+          if (box) {
+            const isAlreadyOpen = box.classList.contains('is-open');
+            closeAllRecBoxes();
+
+            if (!isAlreadyOpen) {
+              box.classList.add('is-open');
+              card.classList.add('has-open-rec');
+            }
+          }
+        });
+      });
+
+      resultsGrid.appendChild(card);
+    }
+  </script>
+</body>
+</html>
